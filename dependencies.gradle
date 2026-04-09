@@ -1,0 +1,36 @@
+dependencies {
+    compileOnly(libs.jetbrains.annotations)
+
+    testJarJar(testApi(libs.testframework.get()))
+
+    // Recipe Viewers
+    compileOnly(forge.bundles.jei)
+
+    // WAILA-likes
+    compileOnly(forge.jade)
+
+    // GameStages
+    // compileOnly(forge.gamestages)
+
+    // Standard runtime mods //
+    localRuntime(libs.testframework)
+
+    localRuntime(forge.jade)
+
+    // Runtime Recipe Viewers - uncomment whichever one you want to use //
+//    localRuntime(forge.emi)
+    localRuntime(forge.jei.neoforge.impl)
+//    localRuntime(forge.bundles.rei.runtime)
+
+    // Client-only runtime mods //
+    clientLocalRuntime(forge.jecharacters.get())
+
+    renderNurseCfg(libs.renderNurse)
+
+    //////////////////////////////////////////////////////
+    // Runtime mods for dev testing with unclean client //
+    //////////////////////////////////////////////////////
+
+    //////////////////////////
+
+}

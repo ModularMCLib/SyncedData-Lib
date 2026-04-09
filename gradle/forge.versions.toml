@@ -1,0 +1,26 @@
+[versions]
+
+jei = "29.4.0.23"
+emi = "1.1.22+1.20.1"
+
+## modrinth maven ##
+jade = "26.0.8+neoforge"
+
+## curseforge maven ##
+jech = "7320201"
+
+## libs ##
+
+
+[libraries]
+jei-common-api      = { module = "mezz.jei:jei-26.1.1-common-api", version.ref = "jei" }
+jei-neoforge-api    = { module = "mezz.jei:jei-26.1.1-neoforge-api", version.ref = "jei" }
+jei-neoforge-impl   = { module = "mezz.jei:jei-26.1.1-neoforge", version.ref = "jei" }
+emi                 = { module = "dev.emi:emi-forge", version.ref = "emi" }
+
+jade                = { module = "maven.modrinth:jade", version.ref = "jade" }
+
+
+jecharacters        = { module = "curse.maven:just-enough-characters-250702", version.ref = "jech" }
+[bundles]
+jei = ["jei-common-api", "jei-neoforge-api", "jei-neoforge-impl"]
