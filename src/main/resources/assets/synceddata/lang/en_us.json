@@ -1,5 +1,5 @@
 {
-  "itemGroup.synceddata": "Example Mod Tab",
-  "block.synceddata.example_block": "Example Block",
-  "item.synceddata.example_item": "Example Item"
+	"itemGroup.synceddata": "Example Mod Tab",
+	"block.synceddata.example_block": "Example Block",
+	"item.synceddata.example_item": "Example Item"
 }

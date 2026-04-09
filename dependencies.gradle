@@ -1,7 +1,7 @@
 dependencies {
     compileOnly(libs.jetbrains.annotations)
 
-    testJarJar(testApi(libs.testframework.get()))
+    testImplementation(libs.testframework.get())
 
     // Recipe Viewers
     compileOnly(forge.bundles.jei)
