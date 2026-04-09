@@ -51,7 +51,7 @@ jobs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts-${{ inputs.branch }}
+          name: build-artifacts-${{ inputs.tag-name }}
           path: build/libs/*
           if-no-files-found: error
           retention-days: 3
