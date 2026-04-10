@@ -42,6 +42,8 @@ neoForge {
             sourceSet = sourceSets.clientExtra
             ideName = "Client"
 
+
+            gameDirectory.set(file('run/client'))
             systemProperty('neoforge.enabledGameTestNamespaces', project.mod_id)
         }
 

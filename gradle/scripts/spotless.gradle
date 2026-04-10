@@ -38,7 +38,7 @@ spotless {
         targetExclude 'src/generated/resources/**'
         biome()
         trimTrailingWhitespace()
-        leadingSpacesToTabs(2)
+        leadingSpacesToTabs()
         endWithNewline()
     }
 }
