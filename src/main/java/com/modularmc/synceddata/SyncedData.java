@@ -22,9 +22,9 @@ import java.nio.file.Path;
 public class SyncedData {
 
     public static final String MOD_ID = "synced";
-    public static final String MOD_NAME = "SyncedData";
+    public static final String MOD_NAME = "SyncedData Lib";
     public static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
-    public static final Codec<Identifier> GTCEU_ID = Codec.STRING.comapFlatMap(
+    public static final Codec<Identifier> SyncedData_ID = Codec.STRING.comapFlatMap(
             str -> Identifier.read(appendIdString(str)),
             s -> s.getNamespace().equals(MOD_ID) ? s.getPath() : s.toString());
     public static final Path SYNCED_FOLDER = getGameDir().resolve("synced");
