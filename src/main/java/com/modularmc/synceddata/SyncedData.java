@@ -1,10 +1,12 @@
 package com.modularmc.synceddata;
 
+import com.modularmc.synceddata.api.sync_system.SyncedComponents;
 import com.modularmc.synceddata.utils.FormattingUtil;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -29,6 +31,10 @@ public class SyncedData {
             s -> s.getNamespace().equals(MOD_ID) ? s.getPath() : s.toString());
     public static final Path SYNCED_FOLDER = getGameDir().resolve("synced");
     private static final Identifier TEMPLATE_LOCATION = Identifier.fromNamespaceAndPath(MOD_ID, "");
+
+    public SyncedData(IEventBus bus) {
+        SyncedComponents.COMPONENTS.register(bus);
+    }
 
     public static Identifier id(String path) {
         if (path.isBlank()) {
