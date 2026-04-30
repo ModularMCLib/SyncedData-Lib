@@ -11,6 +11,7 @@ import net.neoforged.testframework.conf.FrameworkConfiguration;
 public final class SyncedTestFramework {
 
     public SyncedTestFramework(IEventBus bus, ModContainer container) {
+        SyncedTestContent.register(bus);
         FrameworkConfiguration.builder(SyncedData.id("tests"))
                 .build()
                 .create()
