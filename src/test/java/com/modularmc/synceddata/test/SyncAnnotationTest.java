@@ -1,0 +1,94 @@
+package com.modularmc.synceddata.test;
+
+import com.modularmc.synceddata.api.sync_system.meta.ClassSyncData;
+
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.neoforged.testframework.annotation.TestHolder;
+import net.neoforged.testframework.gametest.EmptyTemplate;
+import net.neoforged.testframework.gametest.GameTest;
+
+import static com.modularmc.synceddata.test.SyncTestFixtures.check;
+import static com.modularmc.synceddata.test.SyncTestFixtures.clientUpdateTag;
+import static com.modularmc.synceddata.test.SyncTestFixtures.populatedBlockEntity;
+import static com.modularmc.synceddata.test.SyncTestFixtures.populatedItemData;
+
+public class SyncAnnotationTest {
+
+    @TestHolder(value = "sync_discovery")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void discovery(GameTestHelper helper) {
+        var data = ClassSyncData.getClassData(SyncTestFixtures.TestBlockEntity.class);
+        check(helper, data.getWorldSaveFields().size() == 2, "save=" + data.getWorldSaveFields().size());
+        check(helper, data.getItemSaveFields().size() == 2, "item=" + data.getItemSaveFields().size());
+        check(helper, data.getClientSyncFields().size() == 5, "s2c=" + data.getClientSyncFields().size());
+        check(helper, data.getBothSyncFields().size() == 2, "both=" + data.getBothSyncFields().size());
+        helper.succeed();
+    }
+
+    @TestHolder(value = "sync_nbtkey")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void nbtKeys(GameTestHelper helper) {
+        var data = ClassSyncData.getClassData(SyncTestFixtures.TestBlockEntity.class);
+        check(helper, data.getWorldSaveFields().stream().anyMatch(f -> "owner_id".equals(f.nbtSaveKey)), "nbtKey");
+        check(helper, data.getItemSaveFields().stream().anyMatch(f -> "inv".equals(f.itemNbtKey)), "itemNbtKey");
+        helper.succeed();
+    }
+
+    @TestHolder(value = "sync_listeners")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void listeners(GameTestHelper helper) {
+        var blockEntity = new SyncTestFixtures.TestBlockEntity();
+        blockEntity.getSyncDataHolder().deserializeNBT(helper.getLevel().registryAccess(), clientUpdateTag(), true);
+        check(helper, blockEntity.callbacks.size() == 3, "3 listeners, got " + blockEntity.callbacks.size());
+        helper.succeed();
+    }
+
+    @TestHolder(value = "sync_serialize")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void serialize(GameTestHelper helper) {
+        var registries = helper.getLevel().registryAccess();
+        var blockEntity = populatedBlockEntity();
+        var saveTag = blockEntity.getSyncDataHolder().serializeToSaveNBT(registries);
+        var itemTag = blockEntity.getSyncDataHolder().serializeToItemNBT(registries);
+        check(helper, saveTag.contains("energy"), "save");
+        check(helper, itemTag.contains("config"), "item");
+
+        var restored = new SyncTestFixtures.TestBlockEntity();
+        restored.getSyncDataHolder().deserializeNBT(registries, saveTag, false);
+        restored.getSyncDataHolder().deserializeItemNBT(registries, itemTag);
+        check(helper, restored.energy == 500, "rt");
+        helper.succeed();
+    }
+
+    @TestHolder(value = "sync_nochange")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void noChange(GameTestHelper helper) {
+        var registries = helper.getLevel().registryAccess();
+        var blockEntity = new SyncTestFixtures.TestBlockEntity();
+        blockEntity.getSyncDataHolder().serializeFullClientSyncNBT(registries);
+        check(helper, !blockEntity.getSyncDataHolder().scanAndMarkChanges(registries), "no change");
+        helper.succeed();
+    }
+
+    @TestHolder(value = "sync_item")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void item(GameTestHelper helper) {
+        var registries = helper.getLevel().registryAccess();
+        var itemData = populatedItemData();
+        var stack = new ItemStack(Items.STONE);
+        itemData.itemSyncHolder.saveToStack(stack, registries);
+
+        var restored = new SyncTestFixtures.TestItemData();
+        restored.itemSyncHolder.loadFromStack(stack, registries, false);
+        check(helper, restored.e == 500, "item rt");
+        helper.succeed();
+    }
+}
