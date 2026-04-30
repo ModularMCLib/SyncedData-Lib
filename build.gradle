@@ -81,6 +81,11 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs << "-Aquiet=true" // Suppress mixin notes
 }
 
+tasks.withType(Test).configureEach {
+    // Test sources are NeoForge GameTests and are executed by runGameTestServer, not JUnit.
+    failOnNoDiscoveredTests = false
+}
+
 lombok {
     version = "1.18.38"
 }
