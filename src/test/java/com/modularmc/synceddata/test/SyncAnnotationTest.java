@@ -2,6 +2,7 @@ package com.modularmc.synceddata.test;
 
 import com.modularmc.synceddata.api.sync_system.meta.ClassSyncData;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -158,6 +159,54 @@ public class SyncAnnotationTest {
         var restored = new SyncTestFixtures.TestItemData();
         restored.itemSyncHolder.loadFromStack(stack, registries, false);
         check(helper, restored.e == 500, "item rt");
+        helper.succeed();
+    }
+
+    @TestHolder(value = "sync_registered_block_entity")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void registeredBlockEntity(GameTestHelper helper) {
+        helper.setBlock(1, 1, 1, SyncedTestContent.TEST_SYNC_BLOCK.get());
+        var blockEntity = helper.getBlockEntity(new BlockPos(1, 1, 1), SyncTestFixtures.TestManagedBlockEntity.class);
+        blockEntity.energy = 240;
+        blockEntity.config = "gt";
+        blockEntity.target = 9;
+
+        var saveTag = blockEntity.getSyncDataHolder().serializeToSaveNBT(helper.getLevel().registryAccess());
+        check(helper, saveTag.getInt("energy").orElse(0) == 240, "energy save missing");
+
+        byte[] serverChanges = blockEntity.getSyncDataHolder().collectServerNetworkChanges(helper.getLevel().registryAccess());
+        check(helper, serverChanges.length > 0, "server network payload missing");
+
+        var restored = new SyncTestFixtures.TestManagedBlockEntity();
+        restored.getSyncDataHolder().applyServerNetworkUpdate(helper.getLevel().registryAccess(), serverChanges);
+        check(helper, restored.target == 9, "registered block entity target not restored");
+        helper.succeed();
+    }
+
+    @TestHolder(value = "sync_registered_block_item")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void registeredBlockItem(GameTestHelper helper) {
+        helper.setBlock(1, 1, 1, SyncedTestContent.TEST_SYNC_BLOCK.get());
+        var blockEntity = helper.getBlockEntity(new BlockPos(1, 1, 1), SyncTestFixtures.TestManagedBlockEntity.class);
+        blockEntity.energy = 512;
+        blockEntity.config = "item-data";
+        blockEntity.target = 33;
+
+        ItemStack stack = SyncedTestContent.TEST_SYNC_BLOCK_ITEM.toStack();
+        var components = blockEntity.collectItemComponentsForTest();
+        stack.applyComponents(components);
+
+        helper.setBlock(2, 1, 1, SyncedTestContent.TEST_SYNC_BLOCK.get());
+        var restored = helper.getBlockEntity(new BlockPos(2, 1, 1), SyncTestFixtures.TestManagedBlockEntity.class);
+        restored.applyItemComponentsForTest(stack.getComponents());
+        check(helper, restored.config.equals("item-data"), "block item config not restored");
+        check(helper, restored.target == 0, "block item should not restore sync-only field");
+        check(helper, restored.energy == 0, "block item should not restore save-only field");
+
+        restored.getSyncDataHolder().loadFromItemStack(stack, helper.getLevel().registryAccess());
+        check(helper, restored.config.equals("item-data"), "loadFromItemStack config not restored");
         helper.succeed();
     }
 }

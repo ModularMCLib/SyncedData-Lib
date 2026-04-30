@@ -1,6 +1,8 @@
 package com.modularmc.synceddata.test;
 
+import com.modularmc.synceddata.api.blockentity.BlockEntityCreationInfo;
 import com.modularmc.synceddata.api.sync_system.ISyncManaged;
+import com.modularmc.synceddata.api.sync_system.ManagedSyncBlockEntity;
 import com.modularmc.synceddata.api.sync_system.annotations.ClientFieldChangeListener;
 import com.modularmc.synceddata.api.sync_system.annotations.ItemSave;
 import com.modularmc.synceddata.api.sync_system.annotations.RerenderOnChanged;
@@ -11,6 +13,9 @@ import com.modularmc.synceddata.api.sync_system.holder.ItemSyncHolder;
 import com.modularmc.synceddata.api.sync_system.holder.SyncDataHolder;
 import com.modularmc.synceddata.api.sync_system.meta.FieldCodecs;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponentGetter;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
@@ -174,6 +179,44 @@ final class SyncTestFixtures {
         @ClientFieldChangeListener(fieldName = "target")
         void onTarget() {
             callbacks.add("target");
+        }
+    }
+
+    static final class TestManagedBlockEntity extends ManagedSyncBlockEntity {
+
+        @SaveField
+        int energy;
+        @ItemSave
+        String config;
+        @SyncBoth
+        int target;
+        final List<String> callbacks = new ArrayList<>();
+
+        TestManagedBlockEntity(BlockPos pos, net.minecraft.world.level.block.state.BlockState state) {
+            super(SyncedTestContent.TEST_SYNC_BLOCK_ENTITY.get(), pos, state);
+        }
+
+        TestManagedBlockEntity() {
+            super(new BlockEntityCreationInfo(SyncedTestContent.TEST_SYNC_BLOCK_ENTITY.get(), BlockPos.ZERO,
+                    SyncedTestContent.TEST_SYNC_BLOCK.get().defaultBlockState()));
+        }
+
+        @ClientFieldChangeListener(fieldName = "target")
+        void onTargetChanged() {
+            callbacks.add("target");
+        }
+
+        @Override
+        public void scheduleRenderUpdate() {}
+
+        DataComponentMap collectItemComponentsForTest() {
+            DataComponentMap.Builder builder = DataComponentMap.builder();
+            collectImplicitComponents(builder);
+            return builder.build();
+        }
+
+        void applyItemComponentsForTest(DataComponentGetter components) {
+            applyImplicitComponents(components);
         }
     }
 
