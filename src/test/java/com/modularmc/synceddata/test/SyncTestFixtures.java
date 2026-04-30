@@ -196,4 +196,22 @@ final class SyncTestFixtures {
         @Override
         public void markAsChanged() {}
     }
+
+    static class InvalidListenerBlockEntity extends MockSyncManaged {
+
+        @SaveField
+        int energy;
+
+        @ClientFieldChangeListener(fieldName = "energy")
+        void onEnergy() {}
+    }
+
+    static class DuplicateClientKeyBlockEntity extends MockSyncManaged {
+
+        @SyncToClient
+        int first;
+        @SyncToClient
+        @SaveField(nbtKey = "first")
+        int second;
+    }
 }

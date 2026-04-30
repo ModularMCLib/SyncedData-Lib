@@ -77,6 +77,30 @@ public class SyncAnnotationTest {
         helper.succeed();
     }
 
+    @TestHolder(value = "sync_invalid_listener")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void invalidListener(GameTestHelper helper) {
+        try {
+            ClassSyncData.getClassData(SyncTestFixtures.InvalidListenerBlockEntity.class);
+            helper.fail("invalid listener target should throw");
+        } catch (IllegalArgumentException expected) {
+            helper.succeed();
+        }
+    }
+
+    @TestHolder(value = "sync_duplicate_client_key")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void duplicateClientKey(GameTestHelper helper) {
+        try {
+            ClassSyncData.getClassData(SyncTestFixtures.DuplicateClientKeyBlockEntity.class);
+            helper.fail("duplicate client key should throw");
+        } catch (IllegalArgumentException expected) {
+            helper.succeed();
+        }
+    }
+
     @TestHolder(value = "sync_item")
     @EmptyTemplate("3")
     @GameTest

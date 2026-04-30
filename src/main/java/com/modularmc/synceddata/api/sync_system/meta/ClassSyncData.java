@@ -48,6 +48,12 @@ public final class ClassSyncData {
     private final Set<FieldSyncData> serverSyncFields = new ObjectOpenHashSet<>();
     @Getter
     private final Set<FieldSyncData> bothSyncFields = new ObjectOpenHashSet<>();
+    @Getter
+    private final Set<FieldSyncData> serverUpdateFields = new ObjectOpenHashSet<>();
+    @Getter
+    private FieldSyncData[] orderedClientSyncFields = new FieldSyncData[0];
+    @Getter
+    private FieldSyncData[] orderedServerUpdateFields = new FieldSyncData[0];
 
     private ClassSyncData(Class<?> clazz) {
         MethodHandles.Lookup privateLookup;
@@ -60,6 +66,7 @@ public final class ClassSyncData {
         }
 
         Map<String, List<MethodHandle>> changeListeners = new HashMap<>();
+        Set<String> clientListenerTargets = new HashSet<>();
 
         for (Method method : clazz.getDeclaredMethods()) {
             ClientFieldChangeListener listener = method.getAnnotation(ClientFieldChangeListener.class);
@@ -78,8 +85,19 @@ public final class ClassSyncData {
                 SyncedData.LOGGER.error(e.getMessage());
                 continue;
             }
+            if (listener.fieldName().isBlank()) {
+                throw new IllegalArgumentException("@ClientFieldChangeListener requires a non-blank fieldName: %s.%s"
+                        .formatted(clazz.getName(), method.getName()));
+            }
             changeListeners.computeIfAbsent(listener.fieldName(), $ -> new ArrayList<>()).add(handle);
+            clientListenerTargets.add(listener.fieldName());
         }
+
+        Map<String, FieldSyncData> localFieldsByName = new HashMap<>();
+        Set<String> localSaveKeys = new HashSet<>();
+        Set<String> localItemKeys = new HashSet<>();
+        Set<String> localClientSyncKeys = new HashSet<>();
+        Set<String> localServerSyncKeys = new HashSet<>();
 
         for (Field field : clazz.getDeclaredFields()) {
             boolean hasSave = field.isAnnotationPresent(SaveField.class);
@@ -106,16 +124,36 @@ public final class ClassSyncData {
 
             FieldSyncData syncData = new FieldSyncData(field, handle,
                     changeListeners.getOrDefault(field.getName(), List.of()));
+            if (localFieldsByName.put(syncData.fieldName, syncData) != null) {
+                throw new IllegalArgumentException("Duplicate managed field name in %s: %s"
+                        .formatted(clazz.getName(), syncData.fieldName));
+            }
             managedFields.add(syncData);
 
-            if (hasSave) worldSaveFields.add(syncData);
-            if (hasItem) itemSaveFields.add(syncData);
-            if (hasS2C) clientSyncFields.add(syncData);
-            if (hasC2S) serverSyncFields.add(syncData);
+            if (hasSave) {
+                checkDuplicateKey(localSaveKeys, syncData.nbtSaveKey, clazz, "save");
+                worldSaveFields.add(syncData);
+            }
+            if (hasItem) {
+                checkDuplicateKey(localItemKeys, syncData.itemNbtKey, clazz, "item");
+                itemSaveFields.add(syncData);
+            }
+            if (hasS2C) {
+                checkDuplicateKey(localClientSyncKeys, syncData.nbtSaveKey, clazz, "client sync");
+                clientSyncFields.add(syncData);
+            }
+            if (hasC2S) {
+                checkDuplicateKey(localServerSyncKeys, syncData.fieldName, clazz, "server sync");
+                serverSyncFields.add(syncData);
+                serverUpdateFields.add(syncData);
+            }
             if (hasBoth) {
+                checkDuplicateKey(localClientSyncKeys, syncData.nbtSaveKey, clazz, "client sync");
+                checkDuplicateKey(localServerSyncKeys, syncData.fieldName, clazz, "server sync");
                 bothSyncFields.add(syncData);
                 clientSyncFields.add(syncData);
                 serverSyncFields.add(syncData);
+                serverUpdateFields.add(syncData);
             }
         }
 
@@ -128,6 +166,33 @@ public final class ClassSyncData {
             clientSyncFields.addAll(parentData.clientSyncFields);
             serverSyncFields.addAll(parentData.serverSyncFields);
             bothSyncFields.addAll(parentData.bothSyncFields);
+            serverUpdateFields.addAll(parentData.serverUpdateFields);
+        }
+
+        for (String fieldName : clientListenerTargets) {
+            FieldSyncData localField = localFieldsByName.get(fieldName);
+            if (localField != null && !localField.hasSyncToClient && !localField.hasSyncBoth) {
+                throw new IllegalArgumentException("@ClientFieldChangeListener targets a field that never syncs to client: %s.%s"
+                        .formatted(clazz.getName(), fieldName));
+            }
+            if (localField == null && clientSyncFields.stream().noneMatch(field -> field.fieldName.equals(fieldName))) {
+                throw new IllegalArgumentException("@ClientFieldChangeListener targets unknown field: %s.%s"
+                        .formatted(clazz.getName(), fieldName));
+            }
+        }
+
+        orderedClientSyncFields = clientSyncFields.stream()
+                .sorted(Comparator.comparing(field -> field.nbtSaveKey))
+                .toArray(FieldSyncData[]::new);
+        orderedServerUpdateFields = serverUpdateFields.stream()
+                .sorted(Comparator.comparing(field -> field.fieldName))
+                .toArray(FieldSyncData[]::new);
+    }
+
+    private static void checkDuplicateKey(Set<String> keys, String key, Class<?> owner, String kind) {
+        if (!keys.add(key)) {
+            throw new IllegalArgumentException("Duplicate %s key in %s: %s"
+                    .formatted(kind, owner.getName(), key));
         }
     }
 }
