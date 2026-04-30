@@ -115,5 +115,4 @@ public class SyncAnnotationTest {
         check(helper, restored.e == 500, "item rt");
         helper.succeed();
     }
-
 }
