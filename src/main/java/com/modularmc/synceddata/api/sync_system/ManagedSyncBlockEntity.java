@@ -2,6 +2,8 @@ package com.modularmc.synceddata.api.sync_system;
 
 import com.modularmc.synceddata.api.blockentity.BlockEntityCreationInfo;
 import com.modularmc.synceddata.api.sync_system.holder.SyncDataHolder;
+import com.modularmc.synceddata.api.sync_system.network.ClientBlockEntitySyncPayload;
+import com.modularmc.synceddata.api.sync_system.network.ServerBlockEntitySyncPayload;
 
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -13,12 +15,14 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import com.mojang.serialization.MapCodec;
 import lombok.Getter;
@@ -105,13 +109,26 @@ public abstract class ManagedSyncBlockEntity extends BlockEntity implements ISyn
         setChanged();
         if (getLevel() instanceof ServerLevel serverLevel) {
             if (syncDataHolder.scanAndMarkChanges(serverLevel.registryAccess())) {
-                serverLevel.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(),
-                        Block.UPDATE_CLIENTS);
+                byte[] data = syncDataHolder.collectClientNetworkChanges(serverLevel.registryAccess(), false);
+                if (data.length > 0) {
+                    PacketDistributor.sendToPlayersTrackingChunk(serverLevel,
+                            new ChunkPos(getBlockPos().getX() >> 4, getBlockPos().getZ() >> 4),
+                            ServerBlockEntitySyncPayload.of(this, data));
+                }
             }
         }
     }
 
-    public final void handleClientUpdate(HolderLookup.Provider registries, CompoundTag tag) {
-        syncDataHolder.applyServerUpdate(registries, tag);
+    public final void handleClientUpdate(net.minecraft.core.RegistryAccess registries, byte[] data) {
+        syncDataHolder.applyServerNetworkUpdate(registries, data);
+    }
+
+    public final void pushClientChangesToServer() {
+        if (getLevel() instanceof ClientLevel clientLevel) {
+            byte[] changes = syncDataHolder.collectServerNetworkChanges(clientLevel.registryAccess());
+            if (changes.length > 0) {
+                ClientPacketDistributor.sendToServer(new ClientBlockEntitySyncPayload(getBlockPos().asLong(), changes));
+            }
+        }
     }
 }

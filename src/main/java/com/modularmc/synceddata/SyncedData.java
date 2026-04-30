@@ -1,6 +1,8 @@
 package com.modularmc.synceddata;
 
 import com.modularmc.synceddata.api.sync_system.SyncedComponents;
+import com.modularmc.synceddata.api.sync_system.network.ClientBlockEntitySyncPayload;
+import com.modularmc.synceddata.api.sync_system.network.ServerBlockEntitySyncPayload;
 import com.modularmc.synceddata.utils.FormattingUtil;
 
 import net.minecraft.client.Minecraft;
@@ -12,6 +14,8 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.data.loading.DatagenModLoader;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import com.mojang.serialization.Codec;
@@ -34,6 +38,15 @@ public class SyncedData {
 
     public SyncedData(IEventBus bus) {
         SyncedComponents.COMPONENTS.register(bus);
+        bus.addListener(SyncedData::registerPayloadHandlers);
+    }
+
+    private static void registerPayloadHandlers(RegisterPayloadHandlersEvent event) {
+        PayloadRegistrar registrar = event.registrar(MOD_ID);
+        registrar.playToClient(ServerBlockEntitySyncPayload.TYPE, ServerBlockEntitySyncPayload.CODEC,
+                ServerBlockEntitySyncPayload::execute);
+        registrar.playToServer(ClientBlockEntitySyncPayload.TYPE, ClientBlockEntitySyncPayload.CODEC,
+                ClientBlockEntitySyncPayload::execute);
     }
 
     public static Identifier id(String path) {

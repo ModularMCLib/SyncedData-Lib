@@ -7,13 +7,18 @@ import com.modularmc.synceddata.api.sync_system.meta.ClassSyncData;
 import com.modularmc.synceddata.api.sync_system.meta.FieldSyncData;
 
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.item.ItemStack;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
+import io.netty.buffer.Unpooled;
+import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 
 import java.util.*;
 
@@ -22,7 +27,7 @@ public class SyncDataHolder {
     private final ClassSyncData syncData;
     private final ISyncManaged holder;
 
-    private final Map<String, Object> cachedValues = new HashMap<>();
+    private final Map<FieldSyncData, Object> cachedValues = new Reference2ReferenceOpenHashMap<>();
     private CompoundTag pendingClientChanges = null;
     private boolean fullSyncPending = true;
 
@@ -30,7 +35,7 @@ public class SyncDataHolder {
         holder = o;
         syncData = ClassSyncData.getClassData(o.getClass());
         for (FieldSyncData field : syncData.getClientSyncFields()) {
-            cachedValues.put(field.fieldName, field.handle.get(holder));
+            cachedValues.put(field, field.handle.get(holder));
         }
     }
 
@@ -44,12 +49,12 @@ public class SyncDataHolder {
 
         for (FieldSyncData field : syncData.getClientSyncFields()) {
             Object currentValue = field.handle.get(holder);
-            Object previousValue = cachedValues.get(field.fieldName);
+            Object previousValue = cachedValues.get(field);
             boolean changed = fullSyncPending || !Objects.equals(currentValue, previousValue);
             if (changed) {
                 Tag serialized = encodeField(field, currentValue, registries);
                 changes.put(field.nbtSaveKey, serialized);
-                cachedValues.put(field.fieldName, currentValue);
+                cachedValues.put(field, currentValue);
                 hasChanges = true;
             }
         }
@@ -65,6 +70,84 @@ public class SyncDataHolder {
         CompoundTag changes = pendingClientChanges;
         pendingClientChanges = null;
         return changes != null ? changes : new CompoundTag();
+    }
+
+    public byte[] collectClientNetworkChanges(RegistryAccess registries, boolean force) {
+        if (force) {
+            CompoundTag forcedChanges = new CompoundTag();
+            for (FieldSyncData field : syncData.getClientSyncFields()) {
+                Object currentValue = field.handle.get(holder);
+                forcedChanges.put(field.nbtSaveKey, encodeField(field, currentValue, registries));
+                cachedValues.put(field, currentValue);
+            }
+            pendingClientChanges = forcedChanges;
+            fullSyncPending = false;
+        }
+
+        CompoundTag pendingChanges = getPendingChanges();
+        if (pendingChanges.isEmpty()) {
+            return new byte[0];
+        }
+
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        try {
+            FieldSyncData[] fields = syncData.getOrderedClientSyncFields();
+            for (int i = 0; i < fields.length; i++) {
+                FieldSyncData field = fields[i];
+                Tag value = pendingChanges.get(field.nbtSaveKey);
+                if (value == null) {
+                    continue;
+                }
+                buf.writeVarInt(i);
+                buf.writeNbt(value);
+            }
+            byte[] data = new byte[buf.readableBytes()];
+            buf.getBytes(0, data);
+            return data;
+        } finally {
+            buf.release();
+        }
+    }
+
+    public CompoundTag collectServerChanges(HolderLookup.Provider registries) {
+        CompoundTag changes = new CompoundTag();
+        for (FieldSyncData field : syncData.getServerUpdateFields()) {
+            Object currentValue = field.handle.get(holder);
+            Object previousValue = cachedValues.get(field);
+            if (!Objects.equals(currentValue, previousValue)) {
+                changes.put(field.fieldName, encodeField(field, currentValue, registries));
+                cachedValues.put(field, currentValue);
+            }
+        }
+        return changes;
+    }
+
+    public byte[] collectServerNetworkChanges(RegistryAccess registries) {
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        try {
+            boolean wroteAny = false;
+            FieldSyncData[] fields = syncData.getOrderedServerUpdateFields();
+            for (int i = 0; i < fields.length; i++) {
+                FieldSyncData field = fields[i];
+                Object currentValue = field.handle.get(holder);
+                Object previousValue = cachedValues.get(field);
+                if (Objects.equals(currentValue, previousValue)) {
+                    continue;
+                }
+                buf.writeVarInt(i);
+                buf.writeNbt(encodeField(field, currentValue, registries));
+                cachedValues.put(field, currentValue);
+                wroteAny = true;
+            }
+            if (!wroteAny) {
+                return new byte[0];
+            }
+            byte[] data = new byte[buf.readableBytes()];
+            buf.getBytes(0, data);
+            return data;
+        } finally {
+            buf.release();
+        }
     }
 
     public CompoundTag serializeToSaveNBT(HolderLookup.Provider registries) {
@@ -93,7 +176,7 @@ public class SyncDataHolder {
             Object value = field.handle.get(holder);
             Tag serialized = encodeField(field, value, registries);
             tag.put(field.nbtSaveKey, serialized);
-            cachedValues.put(field.fieldName, value);
+            cachedValues.put(field, value);
         }
         fullSyncPending = false;
         return tag;
@@ -113,7 +196,7 @@ public class SyncDataHolder {
             }
 
             if (readingClientFields) {
-                cachedValues.put(field.fieldName, field.handle.get(holder));
+                cachedValues.put(field, field.handle.get(holder));
                 for (var listener : field.changeListenerHandles) {
                     try {
                         listener.invoke(holder);
@@ -140,11 +223,7 @@ public class SyncDataHolder {
     }
 
     public void applyServerUpdate(HolderLookup.Provider registries, CompoundTag tag) {
-        Set<FieldSyncData> targetFields = new HashSet<>();
-        targetFields.addAll(syncData.getServerSyncFields());
-        targetFields.addAll(syncData.getBothSyncFields());
-
-        for (var field : targetFields) {
+        for (var field : syncData.getServerUpdateFields()) {
             Tag value = tag.get(field.fieldName);
             if (value != null) {
                 Object decoded = decodeField(field, value, field.handle.get(holder), registries);
@@ -152,6 +231,70 @@ public class SyncDataHolder {
                     field.handle.set(holder, decoded);
                 }
             }
+        }
+    }
+
+    public void applyServerNetworkUpdate(RegistryAccess registries, byte[] data) {
+        if (data.length == 0) {
+            return;
+        }
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(data), registries);
+        try {
+            FieldSyncData[] fields = syncData.getOrderedServerUpdateFields();
+            while (buf.isReadable()) {
+                int index = buf.readVarInt();
+                if (index < 0 || index >= fields.length) {
+                    throw new IllegalArgumentException("Invalid server sync field index: " + index);
+                }
+                FieldSyncData field = fields[index];
+                Tag value = buf.readNbt(NbtAccounter.unlimitedHeap());
+                if (value != null) {
+                    Object decoded = decodeField(field, value, field.handle.get(holder), registries);
+                    if (decoded != null) {
+                        field.handle.set(holder, decoded);
+                    }
+                }
+            }
+        } finally {
+            buf.release();
+        }
+    }
+
+    public void applyClientNetworkUpdate(RegistryAccess registries, byte[] data) {
+        if (data.length == 0) {
+            return;
+        }
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(data), registries);
+        try {
+            FieldSyncData[] fields = syncData.getOrderedClientSyncFields();
+            while (buf.isReadable()) {
+                int index = buf.readVarInt();
+                if (index < 0 || index >= fields.length) {
+                    throw new IllegalArgumentException("Invalid client sync field index: " + index);
+                }
+                FieldSyncData field = fields[index];
+                Tag value = buf.readNbt(NbtAccounter.unlimitedHeap());
+                if (value != null) {
+                    Object decoded = decodeField(field, value, field.handle.get(holder), registries);
+                    if (decoded != null) {
+                        field.handle.set(holder, decoded);
+                    }
+                    cachedValues.put(field, field.handle.get(holder));
+                    for (var listener : field.changeListenerHandles) {
+                        try {
+                            listener.invoke(holder);
+                        } catch (Throwable e) {
+                            SyncedData.LOGGER.error("Sync: Error invoking change listener for field {}", field.fieldName);
+                            SyncedData.LOGGER.error(e);
+                        }
+                    }
+                    if (field.triggerClientRerender) {
+                        holder.scheduleRenderUpdate();
+                    }
+                }
+            }
+        } finally {
+            buf.release();
         }
     }
 
@@ -176,7 +319,6 @@ public class SyncDataHolder {
             return nullTag;
         }
         if (field.codec != null) {
-            @SuppressWarnings("unchecked")
             Codec<Object> codec = field.codec;
             DataResult<Tag> result = codec.encodeStart(registries.createSerializationContext(NbtOps.INSTANCE), value);
             return result.getOrThrow();
@@ -196,7 +338,6 @@ public class SyncDataHolder {
             return currentValue;
         }
         if (field.codec != null) {
-            @SuppressWarnings("unchecked")
             Codec<Object> codec = field.codec;
             DataResult<Object> result = codec.parse(registries.createSerializationContext(NbtOps.INSTANCE), tag);
             return result.getOrThrow();
