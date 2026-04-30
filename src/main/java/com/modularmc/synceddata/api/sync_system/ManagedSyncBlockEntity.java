@@ -1,15 +1,28 @@
 package com.modularmc.synceddata.api.sync_system;
 
 import com.modularmc.synceddata.api.blockentity.BlockEntityCreationInfo;
+import com.modularmc.synceddata.api.sync_system.holder.SyncDataHolder;
 
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponentGetter;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 
+import com.mojang.serialization.MapCodec;
 import lombok.Getter;
-import lombok.Setter;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
@@ -17,9 +30,6 @@ public abstract class ManagedSyncBlockEntity extends BlockEntity implements ISyn
 
     @Getter
     protected final SyncDataHolder syncDataHolder = new SyncDataHolder(this);
-    @Getter
-    @Setter
-    private boolean isDirty;
 
     public ManagedSyncBlockEntity(BlockEntityCreationInfo info) {
         super(info.type(), info.pos(), info.state());
@@ -30,16 +40,78 @@ public abstract class ManagedSyncBlockEntity extends BlockEntity implements ISyn
     }
 
     @Override
-    public final void markAsChanged() {
-        isDirty = true;
+    protected void saveAdditional(ValueOutput output) {
+        super.saveAdditional(output);
+        var registries = Objects.requireNonNull(getLevel()).registryAccess();
+        CompoundTag tag = getSyncDataHolder().serializeToSaveNBT(registries)
+                .merge(getSyncDataHolder().serializeToItemNBT(registries));
+        if (!tag.isEmpty()) {
+            output.store("synced", CompoundTag.CODEC, tag);
+        }
+    }
+
+    @Override
+    public void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
+        if (getLevel() == null) return;
+        var registries = getLevel().registryAccess();
+        boolean clientSide = getLevel() instanceof ClientLevel;
+        input.read(MapCodec.assumeMapUnsafe(CompoundTag.CODEC)).ifPresent(fullTag -> {
+            var synced = fullTag.getCompound("synced").orElse(new CompoundTag());
+            if (!synced.isEmpty()) {
+                getSyncDataHolder().deserializeNBT(registries, synced, clientSide);
+                if (!clientSide) {
+                    getSyncDataHolder().deserializeItemNBT(registries, synced);
+                }
+            }
+        });
+    }
+
+    @Override
+    protected void collectImplicitComponents(DataComponentMap.Builder components) {
+        super.collectImplicitComponents(components);
+        var registries = Objects.requireNonNull(getLevel()).registryAccess();
+        components.set(SyncedComponents.BLOCK_ITEM_DATA.get(),
+                getSyncDataHolder().serializeToItemNBT(registries));
+    }
+
+    @Override
+    protected void applyImplicitComponents(DataComponentGetter components) {
+        super.applyImplicitComponents(components);
+        var data = components.get(SyncedComponents.BLOCK_ITEM_DATA.get());
+        if (data != null && getLevel() != null) {
+            getSyncDataHolder().deserializeItemNBT(getLevel().registryAccess(), data);
+        }
+    }
+
+    @Override
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        getSyncDataHolder().resyncAllFields();
+        return getSyncDataHolder().serializeFullClientSyncNBT(registries);
+    }
+
+    @Override
+    public @Nullable Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this,
+                (be, r) -> ((ManagedSyncBlockEntity) be).syncDataHolder.getPendingChanges());
+    }
+
+    @Override
+    public void markAsChanged() {
+        setChanged();
     }
 
     public final void updateTick() {
         setChanged();
-        if (isDirty) {
-            Objects.requireNonNull(getLevel()).sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(),
-                    Block.UPDATE_CLIENTS);
-            isDirty = false;
+        if (getLevel() instanceof ServerLevel serverLevel) {
+            if (syncDataHolder.scanAndMarkChanges(serverLevel.registryAccess())) {
+                serverLevel.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(),
+                        Block.UPDATE_CLIENTS);
+            }
         }
+    }
+
+    public final void handleClientUpdate(HolderLookup.Provider registries, CompoundTag tag) {
+        syncDataHolder.applyServerUpdate(registries, tag);
     }
 }
