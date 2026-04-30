@@ -77,6 +77,51 @@ public class SyncAnnotationTest {
         helper.succeed();
     }
 
+    @TestHolder(value = "sync_server_update")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void serverUpdate(GameTestHelper helper) {
+        var registries = helper.getLevel().registryAccess();
+        var blockEntity = new SyncTestFixtures.TestBlockEntity();
+        blockEntity.target = 77;
+        blockEntity.block = net.minecraft.resources.Identifier.fromNamespaceAndPath("minecraft", "stone");
+        blockEntity.active = true;
+
+        byte[] changes = blockEntity.getSyncDataHolder().collectServerNetworkChanges(registries);
+        check(helper, changes.length > 0, "server network change missing");
+
+        var restored = new SyncTestFixtures.TestBlockEntity();
+        restored.getSyncDataHolder().applyServerNetworkUpdate(registries, changes);
+        check(helper, restored.target == 77, "target not applied");
+        check(helper, net.minecraft.resources.Identifier.fromNamespaceAndPath("minecraft", "stone").equals(restored.block),
+                "block not applied");
+        check(helper, !restored.active, "client field should stay untouched");
+        helper.succeed();
+    }
+
+    @TestHolder(value = "sync_client_network_update")
+    @EmptyTemplate("3")
+    @GameTest
+    public static void clientNetworkUpdate(GameTestHelper helper) {
+        var registries = helper.getLevel().registryAccess();
+        var blockEntity = new SyncTestFixtures.TestBlockEntity();
+        blockEntity.active = true;
+        blockEntity.lastTime = 99L;
+        blockEntity.target = 12;
+
+        check(helper, blockEntity.getSyncDataHolder().scanAndMarkChanges(registries), "scan should detect client changes");
+        byte[] changes = blockEntity.getSyncDataHolder().collectClientNetworkChanges(registries, false);
+        check(helper, changes.length > 0, "client network change missing");
+
+        var restored = new SyncTestFixtures.TestBlockEntity();
+        restored.getSyncDataHolder().applyClientNetworkUpdate(registries, changes);
+        check(helper, restored.active, "active not applied");
+        check(helper, restored.lastTime == 99L, "lastTime not applied");
+        check(helper, restored.target == 12, "target not applied");
+        check(helper, restored.callbacks.size() == 3, "listeners not invoked");
+        helper.succeed();
+    }
+
     @TestHolder(value = "sync_invalid_listener")
     @EmptyTemplate("3")
     @GameTest
