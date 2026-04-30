@@ -4,7 +4,6 @@ import com.modularmc.synceddata.SyncedData;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.BaseEntityBlock;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -22,16 +21,12 @@ public final class SyncedTestContent {
 
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(SyncedData.MOD_ID);
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(SyncedData.MOD_ID);
-    public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES =
-            DeferredRegister.create(net.minecraft.core.registries.Registries.BLOCK_ENTITY_TYPE, SyncedData.MOD_ID);
+    public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(net.minecraft.core.registries.Registries.BLOCK_ENTITY_TYPE, SyncedData.MOD_ID);
 
-    public static final DeferredBlock<TestSyncBlock> TEST_SYNC_BLOCK =
-            BLOCKS.registerBlock("test_sync_block", TestSyncBlock::new, properties -> properties.strength(1.5F));
-    public static final DeferredItem<net.minecraft.world.item.BlockItem> TEST_SYNC_BLOCK_ITEM =
-            ITEMS.registerSimpleBlockItem("test_sync_block", TEST_SYNC_BLOCK);
-    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<SyncTestFixtures.TestManagedBlockEntity>>
-            TEST_SYNC_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("test_sync_block_entity",
-                    () -> new BlockEntityType<>(SyncTestFixtures.TestManagedBlockEntity::new, TEST_SYNC_BLOCK.get()));
+    public static final DeferredBlock<TestSyncBlock> TEST_SYNC_BLOCK = BLOCKS.registerBlock("test_sync_block", TestSyncBlock::new, properties -> properties.strength(1.5F));
+    public static final DeferredItem<net.minecraft.world.item.BlockItem> TEST_SYNC_BLOCK_ITEM = ITEMS.registerSimpleBlockItem("test_sync_block", TEST_SYNC_BLOCK);
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<SyncTestFixtures.TestManagedBlockEntity>> TEST_SYNC_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("test_sync_block_entity",
+            () -> new BlockEntityType<>(SyncTestFixtures.TestManagedBlockEntity::new, TEST_SYNC_BLOCK.get()));
 
     private SyncedTestContent() {}
 

@@ -351,5 +351,4 @@ public class SyncDataHolder {
         SyncedData.LOGGER.error("Sync: No codec for field {} in {}", field.fieldName, holder.getClass());
         return currentValue;
     }
-
 }

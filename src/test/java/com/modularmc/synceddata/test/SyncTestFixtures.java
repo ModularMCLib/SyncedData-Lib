@@ -13,10 +13,10 @@ import com.modularmc.synceddata.api.sync_system.holder.ItemSyncHolder;
 import com.modularmc.synceddata.api.sync_system.holder.SyncDataHolder;
 import com.modularmc.synceddata.api.sync_system.meta.FieldCodecs;
 
-import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentGetter;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;

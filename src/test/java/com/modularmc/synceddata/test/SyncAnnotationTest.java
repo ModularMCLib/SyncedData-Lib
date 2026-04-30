@@ -2,8 +2,8 @@ package com.modularmc.synceddata.test;
 
 import com.modularmc.synceddata.api.sync_system.meta.ClassSyncData;
 
-import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.testframework.annotation.TestHolder;
