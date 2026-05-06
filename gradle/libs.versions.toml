@@ -1,5 +1,5 @@
 [versions]
-minecraft = "1.26.1.1"
+minecraft = "26.1.1"
 neoForge = "26.1.1.15-beta"
 loader = "4"
 shadow = "9.4.0"
